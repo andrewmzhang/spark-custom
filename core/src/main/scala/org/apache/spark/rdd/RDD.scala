@@ -1135,11 +1135,13 @@ abstract class RDD[T: ClassTag](
     } else {
       val cleanSeqOp = context.clean(seqOp)
       val cleanCombOp = context.clean(combOp)
+      logWarning("Tree Aggregate 1")
       val aggregatePartition =
         (it: Iterator[T]) => it.aggregate(zeroValue)(cleanSeqOp, cleanCombOp)
       var partiallyAggregated: RDD[U] = mapPartitions(it => Iterator(aggregatePartition(it)))
       var numPartitions = partiallyAggregated.partitions.length
       val scale = math.max(math.ceil(math.pow(numPartitions, 1.0 / depth)).toInt, 2)
+      logWarning("Tree Aggregate 2")
       // If creating an extra level doesn't help reduce
       // the wall-clock time, we stop tree aggregation.
 
@@ -1147,12 +1149,17 @@ abstract class RDD[T: ClassTag](
       while (numPartitions > scale + math.ceil(numPartitions.toDouble / scale)) {
         numPartitions /= scale
         val curNumPartitions = numPartitions
+        logWarning("Tree Aggregate 3")
         partiallyAggregated = partiallyAggregated.mapPartitionsWithIndex {
           (i, iter) => iter.map((i % curNumPartitions, _))
         }.foldByKey(zeroValue, new HashPartitioner(curNumPartitions))(cleanCombOp).values
+        logWarning("Tree Aggregate 4")
       }
+      logWarning("Tree Aggregate 5")
       val copiedZeroValue = Utils.clone(zeroValue, sc.env.closureSerializer.newInstance())
-      partiallyAggregated.fold(copiedZeroValue)(cleanCombOp)
+      val out = partiallyAggregated.fold(copiedZeroValue)(cleanCombOp)
+      logWarning("Tree Aggregate 6")
+      return out
     }
   }
 
